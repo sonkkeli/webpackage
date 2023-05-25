@@ -29,11 +29,14 @@ var (
 	sxgFlagMIRecordSize = signedExchangesCmd.Int("miRecordSize", 4096, "Record size of Merkle Integrity Content Encoding")
 )
 
+const parsedEd25519KeySigningStrategyName = "ParsedEd25519KeySigningStrategy"
+
 var (
-	integrityBlockCmd = flag.NewFlagSet(integrityBlockSubCmdName, flag.ExitOnError)
-	ibFlagInput       = integrityBlockCmd.String("i", "in.wbn", "Webbundle input file")
-	ibFlagOutput      = integrityBlockCmd.String("o", "out.wbn", "Webbundle output file")
-	ibFlagPrivateKey  = integrityBlockCmd.String("privateKey", "privatekey.pem", "Private key PEM file")
+	integrityBlockCmd     = flag.NewFlagSet(integrityBlockSubCmdName, flag.ExitOnError)
+	ibFlagInput           = integrityBlockCmd.String("i", "in.wbn", "Webbundle input file")
+	ibFlagOutput          = integrityBlockCmd.String("o", "out.wbn", "Webbundle output file")
+	ibFlagPrivateKey      = integrityBlockCmd.String("privateKey", "privatekey.pem", "Private key PEM file")
+	ibFlagSigningStrategy = integrityBlockCmd.String("signingStrategy", parsedEd25519KeySigningStrategyName, fmt.Sprintf("Name of the signing strategy class. Possible values: \"%[1]s\". (default: \"%[1]s\")", parsedEd25519KeySigningStrategyName))
 )
 
 const flagNamePublicKey = "publicKey"
@@ -65,16 +68,20 @@ func run() error {
 	case integrityBlockSubCmdName:
 		integrityBlockCmd.Parse(os.Args[2:])
 
-		// TODO(sonkkeli): Add parsing for the new `signingStrategy` flag and
-		// make another switch case for the different types of signing.
+		// TODO: So far only one supported signing strategy but more to come in the future.
+		switch *ibFlagSigningStrategy {
+		case parsedEd25519KeySigningStrategyName:
+			ed25519privKey, err := readAndParseEd25519PrivateKey(*ibFlagPrivateKey)
+			if err != nil {
+				return err
+			}
 
-		ed25519privKey, err := readAndParseEd25519PrivateKey(*ibFlagPrivateKey)
-		if err != nil {
-			return err
+			var bss integrityblock.ISigningStrategy = integrityblock.NewParsedEd25519KeySigningStrategy(ed25519privKey)
+			return SignWithIntegrityBlockWithCmdFlags(bss)
+
+		default:
+			return errors.New(fmt.Sprintf("Unknown signing strategy, try '%s'", parsedEd25519KeySigningStrategyName))
 		}
-
-		var bss integrityblock.ISigningStrategy = integrityblock.NewParsedEd25519KeySigningStrategy(ed25519privKey)
-		return SignWithIntegrityBlockWithCmdFlags(bss)
 
 	case dumpWebBundleIdSubCmdName:
 		dumpWebBundleIdCmd.Parse(os.Args[2:])
